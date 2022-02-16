@@ -35,7 +35,8 @@ import numpy as np
 import skimage.draw
 
 # Root directory of the project
-ROOT_DIR = os.path.abspath("../../")
+#nh_edit
+ROOT_DIR = os.path.abspath("/home/aim/Mask_RCNN")
 
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
@@ -91,7 +92,10 @@ class BalloonDataset(utils.Dataset):
 
         # Train or validation dataset?
         assert subset in ["train", "val"]
-        dataset_dir = os.path.join(dataset_dir, subset)
+
+        #nh_edit
+#        dataset_dir = os.path.join(dataset_dir, subset)
+        dataset_dir = os.path.join('/home/aim/Mask_RCNN/samples/balloon/balloon_dataset/balloon', subset)
 
         # Load annotations
         # VGG Image Annotator (up to version 1.6) saves each image in the form:
@@ -180,12 +184,19 @@ def train(model):
     """Train the model."""
     # Training dataset.
     dataset_train = BalloonDataset()
+
+
+#nh_edit
+    dataset_path = '/balloon_dataset/balloon'
+
     dataset_train.load_balloon(args.dataset, "train")
+
     dataset_train.prepare()
 
     # Validation dataset
     dataset_val = BalloonDataset()
     dataset_val.load_balloon(args.dataset, "val")
+
     dataset_val.prepare()
 
     # *** This training schedule is an example. Update to your needs ***
@@ -304,6 +315,7 @@ if __name__ == '__main__':
 
     # Validate arguments
     if args.command == "train":
+        #nh_edit 
         assert args.dataset, "Argument --dataset is required for training"
     elif args.command == "splash":
         assert args.image or args.video,\
