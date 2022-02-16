@@ -42,6 +42,7 @@ ROOT_DIR = os.path.abspath("/home/aim/Mask_RCNN")
 sys.path.append(ROOT_DIR)  # To find local version of the library
 from mrcnn.config import Config
 from mrcnn import model as modellib, utils
+from mrcnn import visualize
 
 # Path to trained weights file
 COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
@@ -49,6 +50,10 @@ COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
 # Directory to save logs and model checkpoints, if not provided
 # through the command line argument --logs
 DEFAULT_LOGS_DIR = os.path.join(ROOT_DIR, "logs")
+
+#nh_edit
+source = "scaffold"
+
 
 ############################################################
 #  Configurations
@@ -106,6 +111,91 @@ class BalloonConfig(Config):
 
 #nh_edit
 class ScaffoldDataset(utils.Dataset):
+
+    def load_scaffold(self, dataset_dir, subset):
+        assert subset in ["train", "val"]
+        dataset_dir = os.path.join('/home/aim/Mask_RCNN/scaffold/scaffold_dataset', subset)
+
+        filenames = os.listdir(dataset_dir)
+        jsonfiles,annotations=[],[]
+        for filename in filenames:
+            if filename.endswith(".json"):
+                jsonfiles.append(filename)
+                annotation = json.load(open(os.path.join(dataset_dir,filename)))
+
+#TODO this imagePath is image - file name
+                imagename = annotation['imagePath']
+                if not os.path.isfile(os.path.join(dataset_dir,imagename)):
+                    continue
+#TODO this shapes is label, points, group_id, shape_type, flags are one group .           
+#or read every file of json           
+                if len(annotation["shapes"]) == 0:
+                    continue
+
+                annotations.append(annotation)
+        
+        print("In {source} {subset} dataset we have {number:d} annotation files".format(source=source, subset=subset, number=len(jsonfiles)))
+        print("In {source} {subset} dataset we have {number:d} valid annotations".format(source=source, subset=subset, number=len(jsonfiles)))
+
+
+        labelslist = []
+
+        for annotation in annotations:
+            shapes = []
+            classids = []
+
+            for shape in annotation["shapes"]:
+                label = shape["label"]
+                if labelslist.count(label) == 0:
+                    labelslist.append(label)
+                classids.append(labelslist.index(label)+1)
+                shapes.append(shape["points"])
+
+#TODO : imageWidth, imageHeight is images - height, width             
+
+            width = annotation["imageWidth"]
+            height = annotation["imageHeight"]
+
+            self.add_image(
+                source,
+                image_id=annotation["imagePath"], 
+                path = os.path.join(dataset_dir, annotation["imagePath"]),
+                width=width, height=height, 
+                shapes=shapes, classids=classids)
+        print("In {source} {subset} dataset we have {number:d} class item".format(source=source, subset=subset, number=len(labelslist)))
+
+        for labelid, labelname in enumerate(labelslist):
+            self.add_class(source, labelid, labelname)
+
+    def load_mask(self, image_id):
+
+        image_info = self.image_info[image_id]
+        if image_info["source"] != "scaffold":
+            return super(self.__class__, self).load_mask(image_id)
+
+        info = self.image_info[image_id]
+
+        mask = np.zeros([info["height"], info["width"], len(info["shapes"])], dtype=np.uint8)
+
+        for idx, points in enumerate(info["shapes"]):
+            pointsy,pointsx = zip(*points)
+            rr,cc = skimage.draw.polygon(pointsx, pointsy)
+            mask[rr,cc,idx] =1
+        masks_np = mask.astype(np.bool)
+        classids_np = np.array(image_info["classids"]).astype(np.int32)
+
+        return masks_np, classids_np        
+
+ 
+    def image_reference(self,image_id):
+        """Return the path of the image."""
+        info = self.image_info[image_id]
+        if info["source"] == "scaffold":
+            return info["path"]
+        else:
+            super(self.__class__, self).image_reference(image_id)
+
+'''
     def load_scaffold(self, dataset_dir, subset):
         self.add_class("scaffold", 1, "vertical")
         self.add_class("scaffold", 2, "guard")
@@ -158,34 +248,25 @@ class ScaffoldDataset(utils.Dataset):
                 polygons=polygons,
                 num_ids = num_ids,
                 )        
-    def load_mask(self, image_id):
 
-        image_info = self.image_info[image_id]
-        if image_info["source"] != "scaffold":
-            return super(self.__class__, self).load_mask(image_id)
+                '''
 
-        info = self.image_info[image_id]
-        mask = np.zeros([info["height"], info["width"], len(info["polygons"])],
-                        dtype=np.uint8)
-        for i, p in enumerate(info["polygons"]):
+
+
+
+# this is for via dataset, so I changed for coco format
+#        mask = np.zeros([info["height"], info["width"], len(info["polygons"])],
+#                        dtype=np.uint8)
+#        for i, p in enumerate(info["polygons"]):
             # Get indexes of pixels inside the polygon and set them to 1
-            rr, cc = skimage.draw.polygon(p['all_points_y'], p['all_points_x'])
-            mask[rr, cc, i] = 1
+#            rr, cc = skimage.draw.polygon(p['all_points_y'], p['all_points_x'])
+#            mask[rr, cc, i] = 1
 
-        num_ids = np/array(num_ids, dtype=np.int32)
-        return mask, num_ids
+#        num_ids = np/array(num_ids, dtype=np.int32)
+#        return mask, num_ids
 
 
 #        return mask.astype(np.bool), np.ones([mask.shape[-1]], dtype=np.int32)
-
-
-    def image_reference(self, image_id):
-        """Return the path of the image."""
-        info = self.image_info[image_id]
-        if info["source"] == "scaffold":
-            return info["path"]
-        else:
-            super(self.__class__, self).image_reference(image_id)
 
 
 
@@ -289,16 +370,18 @@ class BalloonDataset(utils.Dataset):
             super(self.__class__, self).image_reference(image_id)
 
 
-def train(model):
+def train(dataset_train, dataset_val, model):
     """Train the model."""
     # Training dataset.
-    dataset_train = BalloonDataset()
+    dataset_train = ScaffoldDataset()
+    dataset_train.load_scaffold(args.dataset, "train")
+
 
 
 #nh_edit
 #    dataset_path = '/balloon_dataset/balloon'
 
-    dataset_train.load_balloon(args.dataset, "train")
+#    dataset_train.load_balloon(args.dataset, "train")
 
     dataset_train.prepare()
 
@@ -328,6 +411,7 @@ def train(model):
                 layers='heads')
 
 
+'''
 def color_splash(image, mask):
     """Apply color splash effect.
     image: RGB image [height, width, 3]
@@ -346,7 +430,6 @@ def color_splash(image, mask):
     else:
         splash = gray.astype(np.uint8)
     return splash
-
 
 def detect_and_color_splash(model, image_path=None, video_path=None):
     assert image_path or video_path
@@ -398,6 +481,35 @@ def detect_and_color_splash(model, image_path=None, video_path=None):
                 count += 1
         vwriter.release()
     print("Saved to ", file_name)
+'''
+
+def test(model, image_path = None, video_path=None, savedfile=None):
+    assert image_path or video_path
+    if image_path:
+        print("Running on {}".format(args.image))
+
+        image = skimage.io.imread(args.image)
+
+        r = model.detect([image], verbose = 1)[0]
+
+        import matplotlib.pyplot as platform
+        
+        
+        _, ax = plt.subplots()
+        visualize.get_display_instances_pic(image, boxes=r['rois'], masks=r['masks'], 
+            class_ids = r['class_ids'], class_number=model.config.NUM_CLASSES,ax = ax,
+            class_names=None,scores=None, show_mask=True, show_bbox=True)
+        # Save output
+        if savedfile == None:
+            file_name = "test_{:%Y%m%dT%H%M%S}.png".format(datetime.datetime.now())
+        else:
+            file_name = savedfile
+        plt.savefig(file_name)
+        #skimage.io.imsave(file_name, testresult)
+    elif video_path:
+        pass
+    print("Saved to ", file_name)        
+
 
 
 ############################################################
@@ -435,9 +547,9 @@ if __name__ == '__main__':
     if args.command == "train":
         #nh_edit 
         assert args.dataset, "Argument --dataset is required for training"
-    elif args.command == "splash":
-        assert args.image or args.video,\
-               "Provide --image or --video to apply color splash"
+    elif args.command == "test":
+        assert args.image or args.video or args.classnum,\
+               "Provide --image or --video and --classnum of your model to apply testing"
 
     print("Weights: ", args.weights)
     print("Dataset: ", args.dataset)
@@ -449,6 +561,17 @@ if __name__ == '__main__':
 #        config = BalloonConfig()
         config = ScaffoldConfig()
 
+        dataset_train, dataset_val = ScaffoldDataset(), ScaffoldDataset()
+        dataset_train.load_scaffold(args.dataset,"train")
+        dataset_val.load_scaffold(args.dataset,"val")
+        config.NUM_CLASSES = len(dataset_train.class_info)
+    elif args.command == "test":
+        config = InferenceConfig()
+        config.NUM_CLASSES = int(args.classnum)+1 # add backgrouond
+        
+    config.display()
+
+    '''
     else:
         class InferenceConfig(BalloonConfig):
             # Set batch size to 1 since we'll be running inference on
@@ -457,6 +580,7 @@ if __name__ == '__main__':
             IMAGES_PER_GPU = 1
         config = InferenceConfig()
     config.display()
+    '''
 
     # Create model
     if args.command == "train":
@@ -483,14 +607,31 @@ if __name__ == '__main__':
 
     # Load weights
     print("Loading weights ", weights_path)
-    if args.weights.lower() == "coco":
-        # Exclude the last layers because they require a matching
-        # number of classes
-        model.load_weights(weights_path, by_name=True, exclude=[
-            "mrcnn_class_logits", "mrcnn_bbox_fc",
-            "mrcnn_bbox", "mrcnn_mask"])
+    if args.command == "train":
+
+        if args.weights.lower() == "coco":
+            # Exclude the last layers because they require a matching
+            # number of classes
+            model.load_weights(weights_path, by_name=True, exclude=[
+                "mrcnn_class_logits", "mrcnn_bbox_fc",
+                "mrcnn_bbox", "mrcnn_mask"])
+        else:
+            model.load_weights(weights_path, by_name=True)
+        
+        train(dataset_train, dataset_val, model)
+    elif args.command == "test":
+        print(os.getcwd())
+        filenames = os.listdir(args.weights)
+        for filename in filenames:
+            if filename.endswith(".h5"):
+                print("Load weights from {filename} ".format(filename=filename))
+                model.load_weights(os.path.join(args.weights,filename),by_name=True)
+                savedfile_name = os.path.splitext(filename)[0] + ".jpg"
+                test(model, image_path=args.image,video_path=args.video, savedfile=savedfile_name)
     else:
-        model.load_weights(weights_path, by_name=True)
+        print("'{}' is not recognized.Use 'train' or 'test'".format(args.command))
+
+        '''        
 
     # Train or evaluate
     if args.command == "train":
@@ -501,3 +642,6 @@ if __name__ == '__main__':
     else:
         print("'{}' is not recognized. "
               "Use 'train' or 'splash'".format(args.command))
+'''
+
+
