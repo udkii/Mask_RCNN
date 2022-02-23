@@ -48,7 +48,10 @@ import urllib.request
 import shutil
 
 # Root directory of the project
-ROOT_DIR = os.path.abspath("../../")
+
+#nh_edit
+#ROOT_DIR = os.path.abspath("../../")
+ROOT_DIR = os.path.abspath("/home/aim/Mask_RCNN/samples/coco")
 
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
