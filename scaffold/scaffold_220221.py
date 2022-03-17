@@ -60,7 +60,7 @@ class ScaffoldConfig(Config):
     IMAGES_PER_GPU = 1
 
     # Uncomment to train on 8 GPUs (default is 1)
-    # GPU_COUNT = 8
+    GPU_COUNT = 1
 
     # Number of classes (including background)
 #    NUM_CLASSES = 1 + 5  # COCO has 80 classes
@@ -299,6 +299,9 @@ def build_coco_results(dataset, image_ids, rois, class_ids, scores, masks):
     """Arrange resutls to match COCO specs in http://cocodataset.org/#format
     """
     # If no results, return an empty list
+    print(rois)
+    print(class_ids)
+
     if rois is None:
         return []
 
@@ -425,12 +428,13 @@ if __name__ == '__main__':
         config = ScaffoldConfig(num_classes=8)
     else:
         class InferenceConfig(ScaffoldConfig):
+            config = ScaffoldConfig(num_classes=8)
             # Set batch size to 1 since we'll be running inference on
             # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
             GPU_COUNT = 1
             IMAGES_PER_GPU = 1
             DETECTION_MIN_CONFIDENCE = 0
-        config = InferenceConfig()
+        config = InferenceConfig(num_classes=8)
     config.display()
 
     # Create model
@@ -482,7 +486,7 @@ if __name__ == '__main__':
         print("Training network heads")
         model.train(dataset_train, dataset_val,
                     learning_rate=config.LEARNING_RATE,
-                    epochs=10,
+                    epochs=2,
                     #epochs=40(original one)
                     layers='heads')
 
@@ -491,7 +495,8 @@ if __name__ == '__main__':
         print("Fine tune Resnet stage 4 and up")
         model.train(dataset_train, dataset_val,
                     learning_rate=config.LEARNING_RATE,
-                    epochs=120,
+                    epochs=6,
+                    #epochs=120,
                     layers='4+')
 
         # Training - Stage 3
@@ -499,13 +504,15 @@ if __name__ == '__main__':
         print("Fine tune all layers")
         model.train(dataset_train, dataset_val,
                     learning_rate=config.LEARNING_RATE / 10,
-                    epochs=160,
+                    epochs=8,
+#                    epochs=160,
                     layers='all')
 
     elif args.command == "evaluate":
+        config = ScaffoldConfig(num_classes=8)
         # Validation dataset
         dataset_val = ScaffoldDataset()
-        coco = dataset_val.load_coco(args.dataset, "val", year=args.year, return_coco=True, auto_download=args.download)
+        coco = dataset_val.load_coco(args.dataset, "val", year=args.year, auto_download=args.download)
         dataset_val.prepare()
         print("Running COCO evaluation on {} images.".format(args.limit))
         evaluate_coco(model, dataset_val, coco, "bbox", limit=int(args.limit))
